@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FiImage, FiZap, FiShare2, FiTrash2, FiRefreshCcw, FiCheckCircle } from "react-icons/fi";
 import PhotoUploader from "@/components/PhotoUploader";
 import TravelogueView from "@/components/TravelogueView";
-import { simulateAICuration, PhotoItem } from "@/lib/ai-curator";
+import { PhotoItem } from "@/lib/ai-curator";
+import exifr from "exifr";
 
 type CurationStep = 'idle' | 'scanning' | 'complete';
 type ViewMode = 'curation' | 'travelogue';
@@ -16,12 +17,27 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<ViewMode>('curation');
   const [rejectedPhotos, setRejectedPhotos] = useState<PhotoItem[]>([]);
 
-  const handleFilesSelected = (files: File[]) => {
-    const newPhotos = files.map((file) => ({
-      id: Math.random().toString(36).substring(7),
-      file,
-      preview: URL.createObjectURL(file),
-      status: 'curated' as const
+  const handleFilesSelected = async (files: File[]) => {
+    const newPhotos = await Promise.all(files.map(async (file) => {
+      let exifData = null;
+      try {
+        const output = await exifr.parse(file, { gps: true, tiff: true, exif: true });
+        if (output) {
+          exifData = {
+            latitude: output.latitude,
+            longitude: output.longitude,
+            date: output.DateTimeOriginal?.toISOString() || output.CreateDate?.toISOString() || null,
+          };
+        }
+      } catch (e) { /* silent fail for non-exif images */ }
+
+      return {
+        id: Math.random().toString(36).substring(7),
+        file,
+        preview: URL.createObjectURL(file),
+        status: 'curated' as const,
+        exif: exifData
+      };
     }));
     setPhotos((prev) => [...prev, ...newPhotos]);
     setCurationStep('idle');
@@ -49,10 +65,37 @@ export default function Home() {
     if (photos.length === 0) return;
     setCurationStep('scanning');
     
-    // Simulate AI Service
-    const { curated, rejected } = await simulateAICuration(photos);
-    setPhotos(curated);
-    setRejectedPhotos(rejected);
+    try {
+      // Send lightweight metadata payload to our real Next.js API
+      const requestData = photos.map(p => ({
+        id: p.id,
+        exif: (p as any).exif
+      }));
+
+      const response = await fetch('/api/curate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ photos: requestData })
+      });
+      
+      const { curated, rejected } = await response.json();
+      
+      const finalCurated = curated.map((c: any) => {
+        const original = photos.find(p => p.id === c.id)!;
+        return { ...original, ...c };
+      });
+
+      const finalRejected = rejected.map((r: any) => {
+        const original = photos.find(p => p.id === r.id)!;
+        return { ...original, ...r };
+      });
+
+      setPhotos(finalCurated);
+      setRejectedPhotos(finalRejected);
+    } catch (e) {
+      console.error("API Error", e);
+    }
+
     setCurationStep('complete');
   };
 
