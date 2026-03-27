@@ -42,3 +42,5 @@ next-env.d.ts
 
 # GSD System
 .agent/
+
+/lib/generated/prisma

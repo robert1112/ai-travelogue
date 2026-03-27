@@ -1,25 +1,87 @@
+@import url("https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap");
 @import "tailwindcss";
 
 @theme {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+
+  /* Leica Brand Palette */
+  --color-leica-red: #CC0000;
+  --color-leica-red-muted: #8B1111;
+  --color-leica-black: #0D0D0D;
+  --color-leica-near-black: #141414;
+  --color-leica-charcoal: #1E1E1E;
+  --color-leica-graphite: #2C2C2C;
+  --color-leica-smoke: #3D3D3D;
+  --color-leica-ash: #666666;
+  --color-leica-silver: #A0A0A0;
+  --color-leica-ivory: #E8E2D9;
+  --color-leica-cream: #F5F0E8;
 }
 
 @layer base {
   :root {
-    --background: #ffffff;
-    --foreground: #171717;
-  }
-
-  /* Dark mode default support */
-  .dark {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0D0D0D;
+    --foreground: #E8E2D9;
   }
 
   body {
     background-color: var(--background);
     color: var(--foreground);
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: "Inter", sans-serif;
+    font-feature-settings: "kern" 1, "liga" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Leica-style text selection */
+  ::selection {
+    background: #CC0000;
+    color: #E8E2D9;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #1E1E1E;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #3D3D3D;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #CC0000;
+  }
+}
+
+/* Leica utility classes */
+@layer utilities {
+  .font-garamond {
+    font-family: "EB Garamond", Georgia, serif;
+  }
+  .font-mono-leica {
+    font-family: "IBM Plex Mono", monospace;
+  }
+  .text-leica-red {
+    color: #CC0000;
+  }
+  .bg-leica-red {
+    background-color: #CC0000;
+  }
+  .border-leica-red {
+    border-color: #CC0000;
+  }
+  .leica-badge {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #CC0000;
+  }
+  .leica-divider {
+    height: 1px;
+    background: linear-gradient(to right, #CC0000, transparent);
   }
 }

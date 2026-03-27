@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import BaseLayout from '@/components/BaseLayout';
+import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
   title: 'Auto-Travelog | AI Travel Journal',
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="antialiased">
-        <BaseLayout>{children}</BaseLayout>
+        <Providers>
+          <BaseLayout>{children}</BaseLayout>
+        </Providers>
       </body>
     </html>
   );

@@ -1,27 +1,156 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useAnimation } from "framer-motion";
 import { FiArrowLeft, FiShare2 } from "react-icons/fi";
 import { PhotoItem } from "@/lib/ai-curator";
 
-// Fallback prose to immediately enhance the UAT experience without requiring a re-upload
-const DUMMY_PROSE = [
-  { title: "Whispers of the Wind", text: "Finding solace in the quiet moments between destinations. The light hit just right.", layoutStyle: "hero" },
-  { title: "Urban Rhythms", text: "The pulse of the city captured in a single frame. Concrete and glass stretching to the sky.", layoutStyle: "left" },
-  { title: "Timeless Echoes", text: "Some places make you forget what year it is. A timeless intersection of nature and architecture.", layoutStyle: "right" },
-  { title: "Golden Hour Magic", text: "That fleeting 15 minutes where everything turns into gold and shadows dance playfully.", layoutStyle: "hero" },
-  { title: "Serendipity", text: "We didn't plan to be here. Sometimes the best views are the ones you never looked for.", layoutStyle: "quote" },
-  { title: "The Quiet Escape", text: "Away from the crowds, away from the noise. Just pure, unadulterated serenity.", layoutStyle: "left" },
-  { title: "Chasing Horizons", text: "No matter how far we walk, the horizon always seems just out of reach, calling us further.", layoutStyle: "right" }
-];
+import type { TravelogueData, ChapterData } from "@/components/TravelogueEditor";
+import { PublishButton } from "@/components/publish-button";
+import { format, parseISO } from "date-fns";
+import React, { useState, useRef, useEffect } from "react";
+
+function InteractivePhoto({ src, alt, themeClass, isPublicView = false }: { src: string, alt?: string, themeClass?: string, isPublicView?: boolean }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [constraints, setConstraints] = useState({ top: 0, left: 0, right: 0, bottom: 0 });
+  const [isEditing, setIsEditing] = useState(false);
+  const controls = useAnimation();
+
+  useEffect(() => {
+    if (containerRef.current) {
+      const { width, height } = containerRef.current.getBoundingClientRect();
+      const maxX = (width * scale - width) / 2;
+      const maxY = (height * scale - height) / 2;
+      setConstraints({
+        top: -maxY,
+        bottom: maxY,
+        left: -maxX,
+        right: maxX,
+      });
+    }
+  }, [scale]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleWheel = (e: WheelEvent) => {
+      if (!isEditing) return;
+      e.preventDefault();
+      setScale(s => {
+        const newScale = Math.min(Math.max(1, s - e.deltaY * 0.005), 4);
+        if (newScale === 1) {
+          controls.start({ x: 0, y: 0 });
+        }
+        return newScale;
+      });
+    };
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [controls, isEditing]);
+
+  return (
+    <div 
+      ref={containerRef} 
+      className="w-full h-full relative overflow-hidden group bg-[#111]"
+    >
+      <motion.img 
+        src={src} 
+        alt={alt || "Travelogue Image"}
+        className={`w-full h-full object-cover origin-center ${themeClass || ''} ${isEditing ? 'pointer-events-auto cursor-grab active:cursor-grabbing' : 'pointer-events-none'}`}
+        style={{ scale }}
+        animate={controls}
+        drag={isEditing && scale > 1}
+        dragConstraints={constraints}
+        dragElastic={0}
+        dragMomentum={false}
+      />
+      
+      {/* Edit Overlay Button (only shown when not editing and NOT in public view) */}
+      {!isEditing && !isPublicView && (
+        <button 
+          onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
+          className="absolute top-4 right-4 bg-black/60 backdrop-blur-md px-4 py-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10 text-white/90 text-xs tracking-widest uppercase font-bold border border-white/20 hover:bg-white/10"
+        >
+          Edit Crop
+        </button>
+      )}
+
+      {/* Editing Mode UI (only shown when editing) */}
+      {isEditing && (
+        <>
+          <button 
+            onClick={(e) => { e.stopPropagation(); setIsEditing(false); }}
+            className="absolute top-4 right-4 bg-black/90 backdrop-blur-xl px-4 py-2 rounded-full z-20 border border-[#CC0000] animate-pulse hover:bg-[#CC0000] group/done transition-all shadow-[0_0_20px_rgba(204,0,0,0.4)]"
+          >
+            <p className="text-[#CC0000] group-hover/done:text-white text-[10px] uppercase tracking-widest font-black">DONE</p>
+          </button>
+
+          <div 
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md px-4 py-2 rounded-full flex items-center gap-3 z-10 border border-white/20 shadow-xl"
+            onWheel={e => e.stopPropagation()} 
+            onClick={e => e.stopPropagation()}
+            onPointerDown={e => e.stopPropagation()}
+          >
+            <span className="text-white/70 text-xs font-mono">1x</span>
+            <input 
+              type="range" 
+              min="1" 
+              max="4" 
+              step="0.01" 
+              value={scale} 
+              onChange={(e) => {
+                 const newScale = parseFloat(e.target.value);
+                 setScale(newScale);
+                 if (newScale === 1) controls.start({ x: 0, y: 0 });
+              }}
+              className="w-24 accent-[#CC0000] cursor-pointer"
+            />
+            <span className="text-white/70 text-xs font-mono">4x</span>
+            
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 interface TravelogueViewProps {
   photos: PhotoItem[];
-  onBack: () => void;
+  travelogueData: TravelogueData;
+  onBack?: () => void;
+  onUpdate?: (newData: TravelogueData) => void;
+  isPublicView?: boolean;
 }
 
-export default function TravelogueView({ photos, onBack }: TravelogueViewProps) {
-  const currentDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+export default function TravelogueView({ photos, travelogueData, onBack, onUpdate, isPublicView = false }: TravelogueViewProps) {
+  const handleUpdate = (field: 'title' | 'subtitle' | 'chapterTitle' | 'chapterNarrative', value: string, chapterId?: string) => {
+    if (!onUpdate) return;
+    const newData = JSON.parse(JSON.stringify(travelogueData));
+    if (field === 'title') newData.title = value;
+    if (field === 'subtitle') newData.subtitle = value;
+    if (chapterId) {
+      const chapter = newData.chapters.find((c: any) => c.clusterId === chapterId);
+      if (chapter) {
+        if (field === 'chapterTitle') chapter.title = value;
+        if (field === 'chapterNarrative') chapter.narrative = value;
+      }
+    }
+    onUpdate(newData);
+  };
+
+  const editableStyle = !isPublicView 
+    ? "focus:outline-none focus:ring-1 focus:ring-[#CC0000]/30 focus:bg-white/5 px-2 rounded-sm transition-all hover:bg-white/5 cursor-text"
+    : "";
+
+  const getThemeClass = (isEnabled = true) => {
+    if (!isEnabled) return '';
+    switch (travelogueData.theme) {
+      case 'leica-monochrome': return 'grayscale contrast-[1.15] brightness-95';
+      case 'portra-warm': return 'sepia-[.2] contrast-105 saturate-125 brightness-105 hue-rotate-[-10deg]';
+      case 'classic-chrome': return 'contrast-110 saturate-[.6] hue-rotate-[15deg] brightness-95';
+      default: return '';
+    }
+  };
 
   return (
     <motion.div 
@@ -37,17 +166,27 @@ export default function TravelogueView({ photos, onBack }: TravelogueViewProps) 
         transition={{ duration: 0.8, delay: 0.5, ease: "easeOut" }}
         className="sticky top-0 inset-x-0 z-50 p-6 md:px-12 flex justify-between items-center pointer-events-none mix-blend-difference"
       >
-        <button 
-          onClick={onBack}
-          className="pointer-events-auto text-white flex items-center gap-3 hover:opacity-70 transition-opacity font-serif italic text-lg"
-        >
-          <FiArrowLeft /> Return
-        </button>
-        <button 
-          className="pointer-events-auto text-white flex items-center gap-3 hover:opacity-70 transition-opacity uppercase tracking-[0.2em] text-xs font-bold"
-        >
-          <FiShare2 /> Publish
-        </button>
+        {!isPublicView ? (
+          <>
+            <button 
+              onClick={() => onBack?.()}
+              className="pointer-events-auto text-white flex items-center gap-3 hover:opacity-70 transition-opacity font-serif italic text-lg"
+            >
+              <FiArrowLeft /> Return
+            </button>
+            {/* Publish Button (conditional) */}
+            {!isPublicView && (
+              <PublishButton 
+                travelogueData={travelogueData} 
+                photos={photos} 
+              />
+            )}
+          </>
+        ) : (
+          <div className="w-full flex justify-end">
+             {/* Logo or something else here if needed */}
+          </div>
+        )}
       </motion.header>
 
       {/* Editorial Title */}
@@ -55,129 +194,206 @@ export default function TravelogueView({ photos, onBack }: TravelogueViewProps) 
         initial={{ opacity: 0, y: 50 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 1.5, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
-        className="min-h-[70vh] flex flex-col items-center justify-center text-center px-4 mb-24 mt-[-80px]"
+        className="min-h-[70vh] flex flex-col items-center justify-center text-center px-4 mb-24 pt-24"
       >
-        <p className="uppercase tracking-[0.4em] text-xs text-neutral-400 mb-8 font-light">
-          An AI Curated Visual Essay
+        <p 
+          contentEditable={!isPublicView}
+          suppressContentEditableWarning
+          onBlur={(e) => handleUpdate('subtitle', e.currentTarget.innerText)}
+          className={`uppercase tracking-[0.4em] text-xs text-neutral-400 mb-8 font-light ${editableStyle}`}
+        >
+          {travelogueData.subtitle}
         </p>
-        <h1 className="text-6xl md:text-8xl lg:text-[10rem] font-serif font-light tracking-tight leading-none mb-12">
-          Visages.<br/>
-          <span className="italic text-neutral-500">Mémories.</span>
+        <h1 
+          contentEditable={!isPublicView}
+          suppressContentEditableWarning
+          onBlur={(e) => handleUpdate('title', e.currentTarget.innerText)}
+          className={`text-5xl sm:text-7xl md:text-8xl lg:text-[9rem] font-serif font-light tracking-tight leading-none mb-12 ${editableStyle}`}
+        >
+          {travelogueData.title}
         </h1>
         <div className="w-px h-24 bg-neutral-700 mb-8 animate-pulse" />
-        <p className="text-sm uppercase tracking-widest text-neutral-500 font-bold">
-          {currentDate}
+        <p className="text-[10px] uppercase tracking-[0.2em] text-[#CC0000] font-bold border border-[#CC0000]/30 px-3 py-1 bg-[#111]">
+          THEME: {travelogueData.theme.replace('-', ' ')}
         </p>
       </motion.div>
 
       {/* Editorial Flow */}
       <div className="max-w-7xl mx-auto px-6 md:px-16 flex flex-col gap-32 md:gap-48 pb-32">
-        {photos.map((photo, index) => {
-          // Merge dummy prose into the photo dynamically
-          const prose = (photo as any).prose || DUMMY_PROSE[index % DUMMY_PROSE.length];
-          const { layoutStyle: style, title, text } = prose;
+        {travelogueData.chapters.map((chapter: ChapterData) => {
+          const { layoutStyle, title, narrative, photoIds, dateStr, location } = chapter;
+          const chapterPhotos = photoIds.map((id: string) => photos.find(p => p.id === id)).filter(Boolean) as PhotoItem[];
+          
+          if (chapterPhotos.length === 0) return null;
 
-          if (style === 'hero') {
+          const displayDate = dateStr !== 'Unknown Date' ? format(parseISO(dateStr), 'MMMM do, yyyy') : 'Unknown Date';
+
+          if (layoutStyle === 'hero-single') {
+            const photo = chapterPhotos[0];
             return (
               <motion.div 
-                key={photo.id}
+                key={chapter.clusterId}
                 initial={{ opacity: 0, y: 100 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-10%" }}
                 transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
                 className="w-full flex flex-col items-center text-center relative"
               >
-                <div className="w-full relative aspect-[16/9] md:aspect-[21/9] overflow-hidden rounded-sm mb-12 group">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.preview} alt={title} className="w-full h-full object-cover transition-transform duration-[3s] group-hover:scale-105" />
-                </div>
-                <h2 className="text-4xl md:text-6xl font-serif mb-6">{title}</h2>
-                <p className="max-w-xl text-neutral-400 font-light leading-relaxed text-lg mx-auto">
-                  {text}
+                <p className="uppercase tracking-[0.2em] text-xs text-neutral-500 mb-6 flex items-center justify-center gap-3">
+                  {location && (
+                    <>
+                      <span className="text-[#CC0000] font-bold">{location}</span>
+                      <span className="w-1 h-1 rounded-full bg-neutral-700" />
+                    </>
+                  )}
+                  <span>{displayDate}</span>
                 </p>
-              </motion.div>
-            );
-          }
-
-          if (style === 'left') {
-            return (
-              <div key={photo.id} className="w-full flex flex-col md:flex-row items-center gap-12 md:gap-24">
-                <motion.div 
-                  initial={{ opacity: 0, x: -50 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true, margin: "-20%" }}
-                  transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                  className="w-full md:w-1/2 aspect-[4/5] overflow-hidden rounded-sm group"
+                <h2 
+                  contentEditable={!isPublicView}
+                  suppressContentEditableWarning
+                  onBlur={(e) => handleUpdate('chapterTitle', e.currentTarget.innerText, chapter.clusterId)}
+                  className={`text-4xl md:text-6xl font-serif mb-6 ${editableStyle}`}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.preview} alt={title} className="w-full h-full object-cover transition-transform duration-[3s] group-hover:scale-105" />
-                </motion.div>
-                <motion.div 
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-20%" }}
-                  transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
-                  className="w-full md:w-1/2 flex flex-col justify-center"
-                >
-                  <p className="uppercase tracking-[0.2em] text-xs text-neutral-500 mb-6">Chapter {index + 1}</p>
-                  <h2 className="text-3xl md:text-5xl font-serif mb-8 italic">{title}</h2>
-                  <p className="text-neutral-400 font-light leading-relaxed text-lg max-w-md">
-                    {text}
-                  </p>
-                </motion.div>
-              </div>
-            );
-          }
-
-          if (style === 'right') {
-            return (
-              <div key={photo.id} className="w-full flex flex-col md:flex-row-reverse items-center gap-12 md:gap-24">
-                <motion.div 
-                  initial={{ opacity: 0, x: 50 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true, margin: "-20%" }}
-                  transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                  className="w-full md:w-1/2 aspect-[3/4] overflow-hidden rounded-sm group scale-95"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.preview} alt={title} className="w-full h-full object-cover transition-transform duration-[3s] group-hover:scale-105" />
-                </motion.div>
-                <motion.div 
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-20%" }}
-                  transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
-                  className="w-full md:w-1/2 flex flex-col justify-center items-end text-right"
-                >
-                  <div className="w-8 h-px bg-neutral-600 mb-8" />
-                  <h2 className="text-3xl md:text-5xl font-serif mb-8">{title}</h2>
-                  <p className="text-neutral-400 font-light leading-relaxed text-lg max-w-sm">
-                    {text}
-                  </p>
-                </motion.div>
-              </div>
-            );
-          }
-
-          if (style === 'quote') {
-            return (
-              <motion.div 
-                key={photo.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true, margin: "-20%" }}
-                transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
-                className="w-full flex flex-col items-center justify-center py-24 px-4 text-center"
-              >
-                <h2 className="text-4xl md:text-7xl font-serif italic font-light leading-tight max-w-4xl text-neutral-300 mb-16 px-4">
-                  "{text}"
+                  {title}
                 </h2>
-                <div className="w-full max-w-sm aspect-square overflow-hidden rounded-full mx-auto grayscale hover:grayscale-0 transition-all duration-[2s]">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={photo.preview} alt={title} className="w-full h-full object-cover" />
+                <p 
+                  contentEditable={!isPublicView}
+                  suppressContentEditableWarning
+                  onBlur={(e) => handleUpdate('chapterNarrative', e.currentTarget.innerText, chapter.clusterId)}
+                  className={`max-w-xl text-neutral-400 font-light leading-relaxed text-lg mx-auto mb-12 ${editableStyle}`}
+                >
+                  {narrative}
+                </p>
+                <div 
+                  className={`w-full relative overflow-hidden rounded-sm group ${
+                    (photo.width || 0) > (photo.height || 0) 
+                      ? "aspect-[16/9] md:aspect-[21/9]" 
+                      : "max-w-xl mx-auto aspect-[4/5] sm:aspect-[2/3]"
+                  }`}
+                >
+                  <InteractivePhoto src={photo.preview} alt={title} themeClass={getThemeClass()} isPublicView={isPublicView} />
                 </div>
-                <p className="uppercase tracking-[0.2em] text-xs text-neutral-500 mt-12">{title}</p>
               </motion.div>
+            );
+          }
+
+          if (layoutStyle === 'diptych') {
+            return (
+              <div key={chapter.clusterId} className="w-full flex-col flex items-center">
+                <motion.div 
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 1 }}
+                  className="text-center mb-12"
+                >
+                  <p className="uppercase tracking-[0.2em] text-xs text-neutral-500 mb-6 flex items-center justify-center gap-3">
+                    {location && (
+                      <>
+                        <span className="text-[#CC0000] font-bold">{location}</span>
+                        <span className="w-1 h-1 rounded-full bg-neutral-700" />
+                      </>
+                    )}
+                    <span>{displayDate}</span>
+                  </p>
+                  <h2 
+                    contentEditable={!isPublicView}
+                    suppressContentEditableWarning
+                    onBlur={(e) => handleUpdate('chapterTitle', e.currentTarget.innerText, chapter.clusterId)}
+                    className={`text-3xl md:text-5xl font-serif mb-6 italic ${editableStyle}`}
+                  >
+                    {title}
+                  </h2>
+                  <p 
+                    contentEditable={!isPublicView}
+                    suppressContentEditableWarning
+                    onBlur={(e) => handleUpdate('chapterNarrative', e.currentTarget.innerText, chapter.clusterId)}
+                    className={`max-w-2xl text-neutral-400 font-light leading-relaxed text-lg mx-auto ${editableStyle}`}
+                  >
+                    {narrative}
+                  </p>
+                </motion.div>
+                <div className="flex flex-col sm:flex-row w-full gap-4 md:gap-8 justify-center">
+                  <motion.div 
+                    initial={{ opacity: 0, x: -30 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 1, delay: 0.2 }}
+                    className={`w-full sm:w-1/2 overflow-hidden rounded-sm group relative bg-[#111] ${
+                      (chapterPhotos[0]?.width || 0) > (chapterPhotos[0]?.height || 0) ? "aspect-[4/3] sm:aspect-video" : "aspect-[3/4]"
+                    }`}
+                  >
+                    <InteractivePhoto src={chapterPhotos[0]?.preview} themeClass={getThemeClass()} isPublicView={isPublicView} />
+                  </motion.div>
+                  {chapterPhotos.length > 1 && (
+                    <motion.div 
+                      initial={{ opacity: 0, x: 30 }}
+                      whileInView={{ opacity: 1, x: 0 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 1, delay: 0.4 }}
+                      className={`w-full sm:w-1/2 sm:mt-16 overflow-hidden rounded-sm group relative bg-[#111] ${
+                        (chapterPhotos[1]?.width || 0) > (chapterPhotos[1]?.height || 0) ? "aspect-[4/3] sm:aspect-video" : "aspect-[3/4]"
+                      }`}
+                    >
+                      <InteractivePhoto src={chapterPhotos[1]?.preview} themeClass={getThemeClass()} isPublicView={isPublicView} />
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            );
+          }
+
+          if (layoutStyle === 'mosaic' || layoutStyle === 'staggered') {
+            return (
+              <div key={chapter.clusterId} className="w-full flex flex-col items-center">
+                <motion.div 
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 1 }}
+                  className="text-center mb-16"
+                >
+                  <p className="uppercase tracking-[0.2em] text-xs text-neutral-500 mb-6 flex items-center justify-center gap-3">
+                    {location && (
+                      <>
+                        <span className="text-[#CC0000] font-bold">{location}</span>
+                        <span className="w-1 h-1 rounded-full bg-neutral-700" />
+                      </>
+                    )}
+                    <span>{displayDate}</span>
+                  </p>
+                  <h2 
+                    contentEditable={!isPublicView}
+                    suppressContentEditableWarning
+                    onBlur={(e) => handleUpdate('chapterTitle', e.currentTarget.innerText, chapter.clusterId)}
+                    className={`text-4xl md:text-6xl font-serif mb-6 ${editableStyle}`}
+                  >
+                    {title}
+                  </h2>
+                  <p 
+                    contentEditable={!isPublicView}
+                    suppressContentEditableWarning
+                    onBlur={(e) => handleUpdate('chapterNarrative', e.currentTarget.innerText, chapter.clusterId)}
+                    className={`max-w-xl text-neutral-400 font-light leading-relaxed text-lg mx-auto ${editableStyle}`}
+                  >
+                    {narrative}
+                  </p>
+                </motion.div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 md:gap-8 w-full">
+                  {chapterPhotos.map((photo, i) => (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      whileInView={{ opacity: 1, scale: 1 }}
+                      viewport={{ once: true }}
+                      transition={{ duration: 0.8, delay: (i % 6) * 0.1 }}
+                      key={photo.id} 
+                      className={`w-full relative overflow-hidden group bg-[#111] ${i % 3 === 0 ? 'aspect-square sm:col-span-2' : 'aspect-[4/5] sm:col-span-1'} ${i > 8 ? 'hidden' : ''}`}
+                    >
+                      <InteractivePhoto src={photo.preview} themeClass={getThemeClass()} isPublicView={isPublicView} />
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
             );
           }
 

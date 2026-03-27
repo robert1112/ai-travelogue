@@ -11,9 +11,9 @@
 (None yet — ship to validate)
 
 ### Active
-- [ ] 支援大批量旅行相片上傳機制
-- [ ] 整合 AI 代理進行圖片智能選用、篩選重複相片及影像最佳化
-- [ ] 生成具備高質感捲動動畫與版面編排的網頁遊記視圖
+- [x] 支援大批量旅行相片上傳機制
+- [x] 整合 AI 代理進行圖片智能選用、篩選重複相片及影像最佳化
+- [x] 生成具備高質感捲動動畫與版面編排的網頁遊記視圖 (包含 EXIF 時間軸與手動拖曳分類)
 - [ ] 產生唯一分享連結 (Public Shareable Link)
 
 ### Out of Scope
@@ -21,4 +21,17 @@
 - [複雜的影片轉場剪輯] — 保持靜態影像配合前端 CSS/JS 動畫即可，避免系統過於笨重
 
 ---
-*Last updated: Today after initialization*
+*Last updated: Phase 4 EXIF Timeline & Drag-Drop Integration Completed*
+# Requirements
+
+## Minimum Viable Product (Phase 1-4 核心需求)
+- 大批量相片上傳拖拉介面 (Drag & Drop)
+- 安全的雲端相片儲存方案
+- 呼叫 AI Vision 模型或演算法進行相片美感評分與自動過濾
+- 優美動態效果的遊記展示頁面 (例如 Framer Motion 捲動動畫)
+- 一鍵產生分享網址供他人瀏覽
+
+## Next Iteration (v2)
+- 根據上傳的相片地理位置與時間戳自動生成敘事文案
+- 朋友留言與點讚互動系統
+- 支援加入背景音樂

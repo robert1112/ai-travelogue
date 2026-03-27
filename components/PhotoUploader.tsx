@@ -2,7 +2,7 @@
 
 import React, { useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { FiUploadCloud } from 'react-icons/fi';
+import { FiAperture } from 'react-icons/fi';
 
 export default function PhotoUploader({ onFilesSelected }: { onFilesSelected: (files: File[]) => void }) {
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -12,7 +12,9 @@ export default function PhotoUploader({ onFilesSelected }: { onFilesSelected: (f
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      'image/*': ['.jpeg', '.jpg', '.png', '.webp', '.heic']
+      'image/*': ['.jpeg', '.jpg', '.png', '.webp', '.heic'],
+      'image/heic': ['.heic'],
+      'image/heif': ['.heif']
     },
     maxFiles: 100
   });
@@ -20,23 +22,31 @@ export default function PhotoUploader({ onFilesSelected }: { onFilesSelected: (f
   return (
     <div 
       {...getRootProps()} 
-      className={`w-full max-w-2xl mx-auto p-12 mt-8 rounded-3xl border-2 border-dashed transition-all cursor-pointer ${
+      className={`w-full max-w-2xl mx-auto p-12 mt-8 rounded-none border transition-all cursor-pointer ${
         isDragActive 
-          ? 'border-blue-500 bg-blue-500/10 scale-[1.02]' 
-          : 'border-neutral-300 dark:border-neutral-700 hover:border-neutral-400 dark:hover:border-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 bg-background/50 backdrop-blur-sm'
+          ? 'border-[#CC0000] bg-[#CC0000]/5 scale-[1.02]' 
+          : 'border-white/10 hover:border-[#CC0000]/50 bg-[#141414]/80 backdrop-blur-sm hover:bg-[#1A1A1A]'
       }`}
     >
       <input {...getInputProps()} />
-      <div className="flex flex-col items-center justify-center text-center">
-        <div className="h-16 w-16 mb-4 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-500 text-3xl">
-          <FiUploadCloud />
+      <div className="flex flex-col items-center justify-center text-center gap-4">
+        {/* Leica lens circle */}
+        <div className={`h-16 w-16 rounded-full border-2 flex items-center justify-center text-2xl transition-all ${
+          isDragActive ? 'border-[#CC0000] text-[#CC0000]' : 'border-white/20 text-[#666666]'
+        }`}>
+          <FiAperture className={`${isDragActive ? 'animate-spin' : ''}`} style={{ animationDuration: '3s' }} />
         </div>
-        <p className="text-xl font-bold mb-2">
-          {isDragActive ? "Drop the photos here..." : "Drag & drop photos here"}
-        </p>
-        <p className="text-neutral-500 dark:text-neutral-400 text-sm">
-          or click to browse from your device (Max 100 images)
-        </p>
+
+        <div>
+          <p className="text-base font-medium tracking-widest uppercase text-[#E8E2D9] mb-2"
+            style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: '0.7rem', letterSpacing: '0.2em' }}>
+            {isDragActive ? "Release to load film" : "Load images"}
+          </p>
+          <p className="text-[#444444] text-xs tracking-wider uppercase"
+            style={{ fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '0.12em' }}>
+            Drag & drop · click to browse · max 100 frames
+          </p>
+        </div>
       </div>
     </div>
   );
