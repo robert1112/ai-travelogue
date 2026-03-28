@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FiImage, FiShare2, FiClock, FiAperture, FiCheck, FiTrash2, FiArrowLeft, FiChevronLeft, FiChevronRight, FiX, FiExternalLink, FiLock } from "react-icons/fi";
 import { MdDragIndicator } from "react-icons/md";
 import PhotoUploader from "@/components/PhotoUploader";
+import SocialMediaImporter from "@/components/SocialMediaImporter";
+import ImportSwitcher from "@/components/ImportSwitcher";
 import TravelogueView from "@/components/TravelogueView";
 import { PhotoItem } from "@/lib/ai-curator";
 import exifr from "exifr";
@@ -303,6 +305,50 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
     });
     setCurationStep('lightTable');
   };
+  const handleUrlsSelected = async (urls: string[]) => {
+    if (!urls.length) return;
+    setCurationStep('processingPhotos');
+    setProcessingStats({ current: 0, total: urls.length });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    const newPhotos: PhotoItem[] = [];
+    for (let i = 0; i < urls.length; i++) {
+      const imageUrl = urls[i];
+      // Create a virtual file object (not a real file)
+      // We'll use the image URL as preview and fetch dimensions
+      const img = new Image();
+      const imgPromise = new Promise<{w: number, h: number}>((resolve) => {
+        img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+        img.onerror = () => resolve({ w: 0, h: 0 });
+      });
+      img.src = imageUrl;
+      const { w, h } = await imgPromise;
+
+      newPhotos.push({
+        id: Math.random().toString(36).substring(7),
+        file: undefined, // No actual file
+        preview: imageUrl,
+        included: true,
+        exif: { date: new Date().toISOString(), latitude: null, longitude: null },
+        width: w,
+        height: h,
+      });
+      setProcessingStats({ current: i + 1, total: urls.length });
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+
+    // Since there's no EXIF date, assign them to a single scene
+    const uniqueSceneId = "scene_" + Math.random().toString(36).substring(7);
+    newPhotos.forEach(photo => {
+      photo.customSceneId = uniqueSceneId;
+    });
+
+    setPhotos((prev) => {
+      const uniqueNewPhotos = newPhotos.filter(np => !prev.some(p => p.preview === np.preview));
+      return [...prev, ...uniqueNewPhotos];
+    });
+    setCurationStep('lightTable');
+  };
 
   const deleteSinglePhoto = (id: string) => {
     setPhotos(prev => prev.filter(p => p.id !== id));
@@ -519,7 +565,7 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
               <span className="block text-5xl sm:text-7xl text-[#E8E2D9] leading-none tracking-tight">Your Travels.</span>
               <span className="block text-5xl sm:text-7xl italic text-[#444444] leading-none tracking-tight mt-1">Beautifully Archived.</span>
             </h1>
-            <PhotoUploader onFilesSelected={handleFilesSelected} />
+            <ImportSwitcher onFilesSelected={handleFilesSelected} onUrlsSelected={handleUrlsSelected} />
           </motion.div>
         )}
 
