@@ -1,155 +1,39 @@
 import { NextResponse } from 'next/server';
-import axios from 'axios';
-import * as cheerio from 'cheerio';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import path from 'path';
 
-interface InstagramImage {
-  url: string;
-  width?: number;
-  height?: number;
+const execAsync = promisify(exec);
+
+interface ScrapeResult {
+  success: boolean;
+  images?: string[];
+  count?: number;
+  error?: string;
 }
 
-async function extractInstagramImages(postUrl: string): Promise<InstagramImage[]> {
+async function scrapeInstagram(url: string): Promise<ScrapeResult> {
+  const scriptPath = path.join(process.cwd(), 'scripts', 'instagram_scraper.py');
+  const pythonPath = path.join(process.cwd(), 'venv', 'bin', 'python3');
+  
   try {
-    // Fetch the Instagram page HTML
-    const response = await axios.get(postUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate, br',
-        'DNT': '1',
-        'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Cache-Control': 'max-age=0',
-      },
-      timeout: 10000,
+    const { stdout, stderr } = await execAsync(`"${pythonPath}" "${scriptPath}" "${url}"`, {
+      timeout: 30000, // 30 seconds
+      maxBuffer: 10 * 1024 * 1024, // 10 MB
     });
-
-    const html = response.data;
-    const $ = cheerio.load(html);
-
-    // Try to extract JSON data from script tags
-    let jsonData: any = null;
-
-    // Method 1: window._sharedData
-    $('script').each((index, element) => {
-      const scriptContent = $(element).html();
-      if (scriptContent && scriptContent.includes('window._sharedData')) {
-        const match = scriptContent.match(/window\._sharedData\s*=\s*({[\s\S]*?});/);
-        if (match) {
-          try {
-            jsonData = JSON.parse(match[1]);
-          } catch (e) {
-            // ignore parse error
-          }
-        }
-      }
-    });
-
-    // Method 2: window.__additionalDataLoaded
-    if (!jsonData) {
-      $('script').each((index, element) => {
-        const scriptContent = $(element).html();
-        if (scriptContent && scriptContent.includes('window.__additionalDataLoaded')) {
-          const match = scriptContent.match(/window\.__additionalDataLoaded\s*\(\s*['"][^'"]*['"],\s*({[\s\S]*?)\s*\);/);
-          if (match) {
-            try {
-              jsonData = JSON.parse(match[1]);
-            } catch (e) {
-              // ignore parse error
-            }
-          }
-        }
-      });
+    
+    if (stderr) {
+      console.warn('Instagram scraper stderr:', stderr);
     }
-
-    // Method 3: look for JSON in script tags with type="application/json"
-    if (!jsonData) {
-      $('script[type="application/json"]').each((index, element) => {
-        const scriptContent = $(element).html();
-        if (scriptContent) {
-          try {
-            const data = JSON.parse(scriptContent);
-            if (data && data.shortcode_media) {
-              jsonData = data;
-            }
-          } catch (e) {
-            // ignore
-          }
-        }
-      });
-    }
-
-    const images: InstagramImage[] = [];
-
-    if (jsonData) {
-      // Navigate to the media data
-      let media = null;
-
-      if (jsonData.shortcode_media) {
-        media = jsonData.shortcode_media;
-      } else if (jsonData.graphql && jsonData.graphql.shortcode_media) {
-        media = jsonData.graphql.shortcode_media;
-      } else if (jsonData.data && jsonData.data.shortcode_media) {
-        media = jsonData.data.shortcode_media;
-      }
-
-      if (media) {
-        // Check if it's a carousel (multiple images)
-        if (media.carousel_media && Array.isArray(media.carousel_media)) {
-          media.carousel_media.forEach((item: any) => {
-            if (item.display_url) {
-              images.push({
-                url: item.display_url,
-                width: item.dimensions?.width,
-                height: item.dimensions?.height,
-              });
-            }
-          });
-        } else if (media.display_url) {
-          // Single image
-          images.push({
-            url: media.display_url,
-            width: media.dimensions?.width,
-            height: media.dimensions?.height,
-          });
-        }
-      }
-    }
-
-    // Fallback: try to extract og:image meta tags
-    if (images.length === 0) {
-      const ogImage = $('meta[property="og:image"]').attr('content');
-      if (ogImage) {
-        images.push({ url: ogImage });
-      }
-    }
-
-    // Fallback: extract all img tags with instagram CDN domain
-    if (images.length === 0) {
-      $('img').each((index, element) => {
-        const src = $(element).attr('src');
-        if (src && src.includes('instagram')) {
-          // Filter out small images (likely icons)
-          const width = parseInt($(element).attr('width') || '0', 10);
-          const height = parseInt($(element).attr('height') || '0', 10);
-          if (width > 100 && height > 100) {
-            images.push({ url: src, width, height });
-          }
-        }
-      });
-    }
-
-    // Deduplicate by URL
-    const uniqueImages = Array.from(new Map(images.map(img => [img.url, img])).values());
-    return uniqueImages.slice(0, 20); // Limit to 20 images
+    
+    const result = JSON.parse(stdout.trim()) as ScrapeResult;
+    return result;
   } catch (error: any) {
-    console.error('Error extracting Instagram images:', error.message);
-    throw new Error(`Failed to extract images from Instagram: ${error.message}`);
+    console.error('Instagram scraper execution error:', error);
+    return {
+      success: false,
+      error: error.message || 'Failed to execute scraper',
+    };
   }
 }
 
@@ -174,16 +58,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Only Instagram URLs are currently supported' }, { status: 400 });
     }
 
-    const images = await extractInstagramImages(url);
+    const result = await scrapeInstagram(url);
 
-    if (images.length === 0) {
+    if (!result.success) {
+      return NextResponse.json({ error: result.error || 'Failed to scrape Instagram' }, { status: 500 });
+    }
+
+    if (!result.images || result.images.length === 0) {
       return NextResponse.json({ error: 'No images found in the provided URL' }, { status: 404 });
     }
 
     return NextResponse.json({ 
       success: true, 
-      images: images.map(img => img.url),
-      count: images.length 
+      images: result.images,
+      count: result.count || result.images.length,
     });
   } catch (error: any) {
     console.error('Scrape social API error:', error);
