@@ -11,4 +11,5 @@ export interface PhotoItem {
   customSceneId?: string;
   width?: number;
   height?: number;
+  isUploading?: boolean;
 }

@@ -57,12 +57,17 @@ export function PublishButton({ travelogueData, photos }: PublishButtonProps) {
   };
 
   const uploadPhoto = async (photo: PhotoItem, userId: string): Promise<string | null> => {
+    // If it's already a public URL, no need to upload
+    if (photo.preview.startsWith('http')) {
+      return photo.preview;
+    }
+
     try {
       const response = await fetch(photo.preview);
       const blob = await response.blob();
       const fileName = `${userId}/${Date.now()}-${photo.id}.jpg`;
       
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('travelogues')
         .upload(fileName, blob, {
           contentType: 'image/jpeg',

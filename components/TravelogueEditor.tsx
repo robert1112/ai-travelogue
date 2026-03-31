@@ -8,6 +8,7 @@ import PhotoUploader from "@/components/PhotoUploader";
 import TravelogueView from "@/components/TravelogueView";
 import { PhotoItem } from "@/lib/ai-curator";
 import exifr from "exifr";
+import { supabase } from "@/lib/supabase";
 import { format, parseISO } from "date-fns";
 import { useRouter } from "next/navigation";
 import { 
@@ -285,7 +286,45 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
       img.src = URL.createObjectURL(displayBlob);
       const { w, h } = await imgPromise;
 
-      newPhotos.push({ id: Math.random().toString(36).substring(7), file, preview: img.src, included: true, exif: exifData, width: w, height: h });
+      const photoId = Math.random().toString(36).substring(7);
+      const photo: PhotoItem = { id: photoId, file, preview: img.src, included: true, exif: exifData, width: w, height: h, isUploading: true };
+      newPhotos.push(photo);
+      
+      // Background upload to Supabase
+      if (session?.user?.id) {
+        const userId = session.user.id;
+        (async () => {
+          try {
+            const fileName = `${userId}/${Date.now()}-${photoId}.jpg`;
+            const { error } = await supabase.storage
+              .from('travelogues')
+              .upload(fileName, displayBlob, {
+                contentType: 'image/jpeg',
+                upsert: true
+              });
+
+            if (error) throw error;
+
+            const { data: { publicUrl } } = supabase.storage
+              .from('travelogues')
+              .getPublicUrl(fileName);
+
+            // Update photo in state with public URL
+            setPhotos(prev => prev.map(p => 
+              p.id === photoId ? { ...p, preview: publicUrl, isUploading: false } : p
+            ));
+          } catch (err) {
+            console.error("Background upload failed for", photoId, err);
+            setPhotos(prev => prev.map(p => 
+              p.id === photoId ? { ...p, isUploading: false } : p
+            ));
+          }
+        })();
+      } else {
+        // If not logged in, just clear uploading state (will upload later on publish)
+        photo.isUploading = false;
+      }
+
       setProcessingStats({ current: i + 1, total: files.length });
       await new Promise(resolve => setTimeout(resolve, 0));
     }
