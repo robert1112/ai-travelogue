@@ -184,6 +184,11 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
   const [lastProcessedState, setLastProcessedState] = useState<string | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [isScrollingDown, setIsScrollingDown] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
+  const [pendingPhotoIds, setPendingPhotoIds] = useState<string[]>([]);
+  const [targetSceneInfo, setTargetSceneInfo] = useState<{ clusterId: string; position: 'before' | 'after' } | null>(null);
+  const [modalDate, setModalDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [modalTime, setModalTime] = useState(format(new Date(), 'HH:mm'));
 
   // Initialize from initialData if provided
   useEffect(() => {
@@ -423,23 +428,42 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
 
     if (overId.startsWith('new-scene-')) {
       const parts = overId.split('-');
-      const position = parts[parts.length - 1];
+      const position = parts[parts.length - 1] as 'before' | 'after';
       const clusterId = parts.slice(2, -1).join('-');
       const idsToMove = selectedPhotoIds.includes(activeId) && selectedPhotoIds.length > 1 ? selectedPhotoIds : [activeId];
+      
+      const draggedPhotos = photos.filter(p => idsToMove.includes(p.id));
+      const hasDate = draggedPhotos.some(p => p.exif?.date);
+      const targetCluster = clusterId !== "NEW" ? clusteredPhotos.clusters.find(c => c.id === clusterId) : null;
+      const targetHasDate = targetCluster && targetCluster.photos.length > 0 && targetCluster.photos.some(p => p.exif?.date);
+
+      if (!hasDate || !targetHasDate) {
+        if (clusteredPhotos.clusters.length === 0) {
+          const uniqueSceneId = "scene_" + Math.random().toString(36).substring(7);
+          const newDateIso = new Date().toISOString();
+          setPhotos(prev => prev.map(p => idsToMove.includes(p.id) ? { ...p, customSceneId: uniqueSceneId, exif: { ...(p.exif || { latitude: null, longitude: null }), date: newDateIso } } : p));
+          return;
+        }
+
+        setPendingPhotoIds(idsToMove);
+        setTargetSceneInfo({ clusterId, position });
+        setShowDateModal(true);
+        return;
+      }
+
       const uniqueSceneId = "scene_" + Math.random().toString(36).substring(7);
       let newDateIso = new Date().toISOString();
-      if (clusterId !== "NEW") {
-        const cluster = clusteredPhotos.clusters.find(c => c.id === clusterId);
-        if (cluster) {
+      if (targetCluster) {
+        if (targetCluster.photos.length > 0) {
           const sortedPhotos = photos.filter(p => p.exif?.date && p.id !== activeId).sort((a,b) => new Date(a.exif!.date!).getTime() - new Date(b.exif!.date!).getTime());
           if (position === 'before') {
-             const firstDate = new Date(cluster.photos[0].exif!.date!).getTime();
-             const sortedIdx = sortedPhotos.findIndex(p => p.id === cluster.photos[0].id);
+             const firstDate = new Date(targetCluster.photos[0].exif!.date!).getTime();
+             const sortedIdx = sortedPhotos.findIndex(p => p.id === targetCluster.photos[0].id);
              const prevDate = sortedIdx > 0 ? new Date(sortedPhotos[sortedIdx-1].exif!.date!).getTime() : firstDate - 20 * 60000;
              newDateIso = new Date(prevDate + (firstDate - prevDate)/2).toISOString();
           } else {
-             const lastDate = new Date(cluster.photos[cluster.photos.length-1].exif!.date!).getTime();
-             const sortedIdx = sortedPhotos.findIndex(p => p.id === cluster.photos[cluster.photos.length-1].id);
+             const lastDate = new Date(targetCluster.photos[targetCluster.photos.length-1].exif!.date!).getTime();
+             const sortedIdx = sortedPhotos.findIndex(p => p.id === targetCluster.photos[targetCluster.photos.length-1].id);
              const nextDate = sortedIdx >= 0 && sortedIdx < sortedPhotos.length -1 ? new Date(sortedPhotos[sortedIdx+1].exif!.date!).getTime() : lastDate + 20 * 60000;
              newDateIso = new Date(lastDate + (nextDate - lastDate)/2).toISOString();
           }
@@ -506,12 +530,21 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
   const dragOverlayIsMulti = !!activeDragId && selectedPhotoIds.includes(activeDragId) && selectedPhotoIds.length > 1;
   const dragOverlayGhosts = dragOverlayIsMulti ? selectedPhotoIds.filter(id => id !== activeDragId).slice(0, 2).map(id => photos.find(p => p.id === id)).filter((p): p is PhotoItem => !!p) : [];
 
+  const applyDateToPhotos = (dateStr: string, timeStr: string) => {
+    if (!targetSceneInfo || pendingPhotoIds.length === 0) return;
+    const newDateIso = new Date(`${dateStr}T${timeStr}`).toISOString();
+    const uniqueSceneId = "scene_" + Math.random().toString(36).substring(7);
+    setPhotos(prev => prev.map(p => pendingPhotoIds.includes(p.id) ? { ...p, customSceneId: uniqueSceneId, exif: { ...(p.exif || { latitude: null, longitude: null }), date: newDateIso } } : p));
+    setShowDateModal(false);
+    setPendingPhotoIds([]);
+    setTargetSceneInfo(null);
+  };
+
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
       <div className="flex flex-col items-center justify-start min-h-[80vh] text-center pt-8 w-full">
         {photos.length === 0 && curationStep === 'idle' && (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl w-full px-4">
-            <div className="flex justify-center mb-8"><AuthButton /></div>
             <span className="inline-flex items-center gap-2 py-1 px-3 mb-8 border border-[#CC0000]/30 text-[#CC0000]" style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: '0.6rem', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
               <span className="h-1.5 w-1.5 rounded-full bg-[#CC0000]" /> AI Travelog · Est. 2025
             </span>
@@ -562,6 +595,11 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
                     <textarea placeholder="Define core mood..." value={globalPrompt} onChange={(e) => setGlobalPrompt(e.target.value)} rows={2} className="w-full bg-transparent border-none p-0 text-white/90 focus:ring-0 resize-none text-xl md:text-2xl font-serif italic" />
                   </motion.div>
                   <div className="space-y-16 flex-1 pb-16">
+                    {activeDragId && (
+                      <div className="py-4 bg-[#0D0D0D]/50 -mx-4 px-4 mb-4">
+                        <NewSceneDroppable id="new-scene-NEW-before" label="▲ Drop here to create new scene" className="w-full h-12 border-2" />
+                      </div>
+                    )}
                     {clusteredPhotos.clusters.map((cluster, clusterIndex) => (
                       <div key={cluster.id} className={`relative p-4 rounded-xl ${activeDragId ? 'bg-white/[0.02] border border-dashed border-white/10' : ''}`} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, cluster.id, cluster.photos.length)}>
                         {activeDragId && clusterIndex === 0 && <NewSceneDroppable id={`new-scene-${cluster.id}-before`} label="▲ New scene above" className="w-full h-9 mb-4" />}
@@ -576,10 +614,17 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
                     ))}
                   </div>
                   {clusteredPhotos.uncategorized.length > 0 && (
-                    <motion.div layout className="sticky bottom-0 bg-[#0D0D0D]/95 border-t border-[#CC0000]/30 z-30 pt-4 pb-4 px-4 -mx-4">
-                       <div className="flex justify-between items-center mb-4"><h3 className="text-[#CC0000] font-bold font-mono text-[0.75rem] uppercase">No Date Metadata</h3><button onClick={() => setPhotos(prev => prev.filter(p => p.exif?.date))} className="text-[#888] text-[0.65rem] uppercase font-mono">Clear All</button></div>
-                       <div className="flex gap-4 overflow-x-auto pb-4"><SortableContext items={clusteredPhotos.uncategorized.map(p => p.id)} strategy={rectSortingStrategy}>{clusteredPhotos.uncategorized.map(photo => <div key={photo.id} className="w-24 flex-shrink-0"><SortablePhotoCard photo={photo} isSelected={selectedPhotoIds.includes(photo.id)} onToggle={togglePhotoSelection} onClick={setActiveLightboxPhotoId} onDelete={deleteSinglePhoto} /></div>)}</SortableContext></div>
-                    </motion.div>
+                    <>
+                      {clusteredPhotos.clusters.length > 0 && activeDragId && clusteredPhotos.uncategorized.some(p => p.id === activeDragId) && (
+                        <div className="py-8 bg-[#0D0D0D]/50 -mx-4 px-4 mb-4">
+                          <NewSceneDroppable id="new-scene-NEW-after" label="▼ Drop here to create new scene" className="w-full h-12 border-2" />
+                        </div>
+                      )}
+                      <motion.div layout className={`bg-[#0D0D0D]/95 border-t border-[#CC0000]/30 pt-4 pb-4 px-4 -mx-4 ${activeDragId ? 'relative' : 'sticky bottom-0'} z-30`}>
+                         <div className="flex justify-between items-center mb-4"><h3 className="text-[#CC0000] font-bold font-mono text-[0.75rem] uppercase">No Date Metadata</h3><button onClick={() => setPhotos(prev => prev.filter(p => p.exif?.date))} className="text-[#888] text-[0.65rem] uppercase font-mono">Clear All</button></div>
+                         <div className="flex gap-4 overflow-x-auto pb-4"><SortableContext items={clusteredPhotos.uncategorized.map(p => p.id)} strategy={rectSortingStrategy}>{clusteredPhotos.uncategorized.map(photo => <div key={photo.id} className="w-24 flex-shrink-0"><SortablePhotoCard photo={photo} isSelected={selectedPhotoIds.includes(photo.id)} onToggle={togglePhotoSelection} onClick={setActiveLightboxPhotoId} onDelete={deleteSinglePhoto} /></div>)}</SortableContext></div>
+                      </motion.div>
+                    </>
                   )}
                 </div>
               </div>
@@ -595,6 +640,46 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
               <img src={lightboxPhoto.preview} className="max-w-full max-h-[75vh] object-contain rounded-sm" alt="lightbox" />
               <div className="text-[#CC0000] font-mono text-[0.7rem]">{format(parseISO(lightboxPhoto.exif?.date || new Date().toISOString()), "dd MMM yyyy · HH:mm")}</div>
               <button onClick={() => setActiveLightboxPhotoId(null)} className="absolute top-[-40px] right-0 text-white/60 p-2"><FiX size={24} /></button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showDateModal && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-center justify-center p-4" onClick={() => { setShowDateModal(false); setPendingPhotoIds([]); setTargetSceneInfo(null); }}>
+            <motion.div initial={{ scale: 0.95 }} animate={{ scale: 1 }} exit={{ scale: 0.95 }} className="bg-[#111] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 mb-6">
+                <div className="h-1.5 w-1.5 rounded-full bg-[#CC0000]" />
+                <span className="text-[#CC0000] uppercase tracking-[0.3em] font-bold text-[10px] font-mono">Set Date & Time</span>
+              </div>
+              <p className="text-white/60 text-sm mb-6">These photos have no date metadata. Please set the date to create a new scene.</p>
+              <div className="flex gap-3 mb-6">
+                <div className="flex-1">
+                  <label className="text-white/40 text-[10px] uppercase font-bold tracking-wider block mb-2">Date</label>
+                  <input type="date" value={modalDate} onChange={(e) => setModalDate(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-[#CC0000]" />
+                </div>
+                <div className="flex-1">
+                  <label className="text-white/40 text-[10px] uppercase font-bold tracking-wider block mb-2">Time</label>
+                  <input type="time" value={modalTime} onChange={(e) => setModalTime(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white text-sm focus:outline-none focus:border-[#CC0000]" />
+                </div>
+              </div>
+              {pendingPhotoIds.length > 0 && (
+                <div className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                  {pendingPhotoIds.map(id => {
+                    const photo = photos.find(p => p.id === id);
+                    if (!photo) return null;
+                    return (
+                      <div key={id} className="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden border border-white/10">
+                        <img src={photo.preview} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <button onClick={() => applyDateToPhotos(modalDate, modalTime)} className="w-full py-3 bg-[#CC0000] text-white uppercase tracking-widest text-xs font-bold rounded-lg hover:bg-[#CC0000]/90 transition-colors">
+                Confirm
+              </button>
             </motion.div>
           </motion.div>
         )}
