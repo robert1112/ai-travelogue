@@ -228,7 +228,7 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
       const photoDateStr = format(photoTime, "yyyy-MM-dd");
       
       if (!currentCluster) {
-        currentCluster = { id: `cluster_${photoTime}`, dateStr: photoDateStr, timeRangeStr: format(photoTime, "HH:mm"), photos: [photo] };
+        currentCluster = { id: `cluster_${photo.id}`, dateStr: photoDateStr, timeRangeStr: format(photoTime, "HH:mm"), photos: [photo] };
         clusters.push(currentCluster);
       } else {
         const lastPhotoTime = new Date(currentCluster.photos[currentCluster.photos.length - 1].exif!.date!).getTime();
@@ -237,7 +237,7 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
         
         if (photoTime - lastPhotoTime > TIME_THRESHOLD || isDifferentDay || photo.customSceneId !== prevSceneId) {
           if (currentCluster.photos.length > 1) currentCluster.timeRangeStr += ` - ${format(lastPhotoTime, "HH:mm")}`;
-          currentCluster = { id: `cluster_${photoTime}`, dateStr: photoDateStr, timeRangeStr: format(photoTime, "HH:mm"), photos: [photo] };
+          currentCluster = { id: `cluster_${photo.id}`, dateStr: photoDateStr, timeRangeStr: format(photoTime, "HH:mm"), photos: [photo] };
           clusters.push(currentCluster);
         } else {
           currentCluster.photos.push(photo);
@@ -407,6 +407,7 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
   const blobToBase64 = async (blobUrl: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = new Image();
+      img.crossOrigin = "anonymous";
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const MAX_DIMENSION = 512;
@@ -634,9 +635,9 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
                     <textarea placeholder="Define core mood..." value={globalPrompt} onChange={(e) => setGlobalPrompt(e.target.value)} rows={2} className="w-full bg-transparent border-none p-0 text-white/90 focus:ring-0 resize-none text-xl md:text-2xl font-serif italic" />
                   </motion.div>
                   <div className="space-y-16 flex-1 pb-16">
-                    {activeDragId && (
-                      <div className="py-4 bg-[#0D0D0D]/50 -mx-4 px-4 mb-4">
-                        <NewSceneDroppable id="new-scene-NEW-before" label="▲ Drop here to create new scene" className="w-full h-12 border-2" />
+                    {activeDragId && clusteredPhotos.clusters.length === 0 && (
+                      <div className="py-8 bg-[#0D0D0D]/50 -mx-4 px-4 mb-8">
+                        <NewSceneDroppable id="new-scene-NEW-before" label="▲ Drop here to create your first scene" className="w-full h-16 border-2" />
                       </div>
                     )}
                     {clusteredPhotos.clusters.map((cluster, clusterIndex) => (
@@ -653,17 +654,10 @@ export default function TravelogueEditor({ initialData, initialDraftId }: Travel
                     ))}
                   </div>
                   {clusteredPhotos.uncategorized.length > 0 && (
-                    <>
-                      {clusteredPhotos.clusters.length > 0 && activeDragId && clusteredPhotos.uncategorized.some(p => p.id === activeDragId) && (
-                        <div className="py-8 bg-[#0D0D0D]/50 -mx-4 px-4 mb-4">
-                          <NewSceneDroppable id="new-scene-NEW-after" label="▼ Drop here to create new scene" className="w-full h-12 border-2" />
-                        </div>
-                      )}
-                      <motion.div layout className={`bg-[#0D0D0D]/95 border-t border-[#CC0000]/30 pt-4 pb-4 px-4 -mx-4 ${activeDragId ? 'relative' : 'sticky bottom-0'} z-30`}>
+                    <motion.div layout className={`bg-[#0D0D0D]/95 border-t border-[#CC0000]/30 pt-4 pb-4 px-4 -mx-4 ${activeDragId ? 'relative' : 'sticky bottom-0'} z-30`}>
                          <div className="flex justify-between items-center mb-4"><h3 className="text-[#CC0000] font-bold font-mono text-[0.75rem] uppercase">No Date Metadata</h3><button onClick={() => setPhotos(prev => prev.filter(p => p.exif?.date))} className="text-[#888] text-[0.65rem] uppercase font-mono">Clear All</button></div>
                          <div className="flex gap-4 overflow-x-auto pb-4"><SortableContext items={clusteredPhotos.uncategorized.map(p => p.id)} strategy={rectSortingStrategy}>{clusteredPhotos.uncategorized.map(photo => <div key={photo.id} className="w-24 flex-shrink-0"><SortablePhotoCard photo={photo} isSelected={selectedPhotoIds.includes(photo.id)} onToggle={togglePhotoSelection} onClick={setActiveLightboxPhotoId} onDelete={deleteSinglePhoto} /></div>)}</SortableContext></div>
                       </motion.div>
-                    </>
                   )}
                 </div>
               </div>

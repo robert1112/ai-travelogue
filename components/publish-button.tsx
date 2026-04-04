@@ -26,6 +26,7 @@ export function PublishButton({ travelogueData, photos }: PublishButtonProps) {
     
     return new Promise((resolve) => {
       const img = new Image();
+      img.crossOrigin = "anonymous";
       img.onload = () => {
         const canvas = document.createElement('canvas');
         const MAX_DIM = 400;
