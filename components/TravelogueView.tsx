@@ -314,13 +314,13 @@ export default function TravelogueView({ photos, travelogueData, onBack, onUpdat
                     {narrative}
                   </p>
                 </motion.div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 w-full gap-6 md:gap-8 justify-center">
+                <div className="flex flex-col sm:flex-row w-full gap-4 md:gap-8 justify-center">
                   <motion.div 
-                    initial={{ opacity: 0, y: 30, x: 0 }}
-                    whileInView={{ opacity: 1, y: 0, x: 0 }}
+                    initial={{ opacity: 0, x: -30 }}
+                    whileInView={{ opacity: 1, x: 0 }}
                     viewport={{ once: true }}
                     transition={{ duration: 1, delay: 0.2 }}
-                    className={`w-full overflow-hidden rounded-sm group relative bg-[#111] ${
+                    className={`w-full sm:w-1/2 overflow-hidden rounded-sm group relative bg-[#111] ${
                       (chapterPhotos[0]?.width || 0) > (chapterPhotos[0]?.height || 0) ? "aspect-[4/3] sm:aspect-video" : "aspect-[3/4]"
                     }`}
                   >
@@ -328,11 +328,11 @@ export default function TravelogueView({ photos, travelogueData, onBack, onUpdat
                   </motion.div>
                   {chapterPhotos.length > 1 && (
                     <motion.div 
-                      initial={{ opacity: 0, y: 30, x: 0 }}
-                      whileInView={{ opacity: 1, y: 0, x: 0 }}
+                      initial={{ opacity: 0, x: 30 }}
+                      whileInView={{ opacity: 1, x: 0 }}
                       viewport={{ once: true }}
                       transition={{ duration: 1, delay: 0.4 }}
-                      className={`w-full sm:mt-16 overflow-hidden rounded-sm group relative bg-[#111] ${
+                      className={`w-full sm:w-1/2 sm:mt-16 overflow-hidden rounded-sm group relative bg-[#111] ${
                         (chapterPhotos[1]?.width || 0) > (chapterPhotos[1]?.height || 0) ? "aspect-[4/3] sm:aspect-video" : "aspect-[3/4]"
                       }`}
                     >
@@ -388,7 +388,7 @@ export default function TravelogueView({ photos, travelogueData, onBack, onUpdat
                       viewport={{ once: true }}
                       transition={{ duration: 0.8, delay: (i % 6) * 0.1 }}
                       key={photo.id} 
-                      className={`w-full h-auto relative overflow-hidden group bg-[#111] ${i % 3 === 0 ? 'aspect-square sm:col-span-2' : 'aspect-[4/5] sm:col-span-1'} ${i > 8 ? 'hidden' : ''}`}
+                      className={`w-full relative overflow-hidden group bg-[#111] ${i % 3 === 0 ? 'aspect-square sm:col-span-2' : 'aspect-[4/5] sm:col-span-1'} ${i > 8 ? 'hidden' : ''}`}
                     >
                       <InteractivePhoto src={photo.preview} themeClass={getThemeClass()} isPublicView={isPublicView} />
                     </motion.div>
