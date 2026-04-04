@@ -1,4 +1,4 @@
-"use client";
+"use client"; 
 
 import { motion, useAnimation } from "framer-motion";
 import { FiArrowLeft, FiShare2 } from "react-icons/fi";
@@ -120,9 +120,10 @@ interface TravelogueViewProps {
   onBack?: () => void;
   onUpdate?: (newData: TravelogueData) => void;
   isPublicView?: boolean;
+  userName?: string;
 }
 
-export default function TravelogueView({ photos, travelogueData, onBack, onUpdate, isPublicView = false }: TravelogueViewProps) {
+export default function TravelogueView({ photos, travelogueData, onBack, onUpdate, isPublicView = false, userName }: TravelogueViewProps) {
   const handleUpdate = (field: 'title' | 'subtitle' | 'chapterTitle' | 'chapterNarrative', value: string, chapterId?: string) => {
     if (!onUpdate) return;
     const newData = JSON.parse(JSON.stringify(travelogueData));
@@ -158,7 +159,7 @@ export default function TravelogueView({ photos, travelogueData, onBack, onUpdat
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 1, ease: "easeInOut" }}
-      className="fixed inset-0 z-[100] bg-[#0A0A0A] text-[#f4f4f4] overflow-y-auto w-full pb-32 font-sans selection:bg-neutral-800"
+      className="fixed inset-0 z-[100] bg-[#0A0A0A] text-[#f4f4f4] overflow-y-auto overflow-x-hidden w-full pb-32 font-sans selection:bg-neutral-800"
     >
       <motion.header 
         initial={{ y: -50, opacity: 0 }}
@@ -208,7 +209,7 @@ export default function TravelogueView({ photos, travelogueData, onBack, onUpdat
           contentEditable={!isPublicView}
           suppressContentEditableWarning
           onBlur={(e) => handleUpdate('title', e.currentTarget.innerText)}
-          className={`text-5xl sm:text-7xl md:text-8xl lg:text-[9rem] font-serif font-light tracking-tight leading-none mb-12 ${editableStyle}`}
+          className={`text-4xl sm:text-7xl md:text-8xl lg:text-[9rem] font-serif font-light tracking-tight leading-none mb-12 break-words overflow-hidden ${editableStyle}`}
         >
           {travelogueData.title}
         </h1>
@@ -233,7 +234,7 @@ export default function TravelogueView({ photos, travelogueData, onBack, onUpdat
             return (
               <motion.div 
                 key={chapter.clusterId}
-                initial={{ opacity: 0, y: 100 }}
+                initial={{ opacity: 0, y: 60 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-10%" }}
                 transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
@@ -379,7 +380,7 @@ export default function TravelogueView({ photos, travelogueData, onBack, onUpdat
                     {narrative}
                   </p>
                 </motion.div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-4 md:gap-8 w-full">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-4 md:gap-8 w-full">
                   {chapterPhotos.map((photo, i) => (
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.95 }}
@@ -416,6 +417,16 @@ export default function TravelogueView({ photos, travelogueData, onBack, onUpdat
         <p className="font-serif italic text-neutral-500">
           Generated via AI Editorial Framework
         </p>
+        
+        {/* Attribution: only at the very bottom of the document flow */}
+        {isPublicView && (
+          <div className="mt-16 flex flex-col items-center">
+            <div className="h-px w-24 bg-white/10 mb-8" />
+            <p className="text-[10px] uppercase tracking-[0.4em] text-white/30 font-bold">
+              Created by {userName || "a Traveler"} @ Auto-Travelog
+            </p>
+          </div>
+        )}
       </motion.div>
     </motion.div>
   );

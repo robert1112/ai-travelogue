@@ -73,14 +73,9 @@ export default async function PublicTraveloguePage({ params }: PublicTravelogueP
         photos={photos} 
         travelogueData={travelogueData} 
         isPublicView={true} 
+        userName={travelogue.user.name || undefined}
       />
       
-      {/* Small credit footer for public view */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[101] pointer-events-none">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-white/30 font-bold">
-          Created by {travelogue.user.name || "a Traveler"} @ Auto-Travelog
-        </p>
-      </div>
     </div>
   );
 }
